@@ -13,140 +13,227 @@ import (
 //go:embed binding/test.wasm
 var icuWasm []byte
 
-type ModuleString struct {
-	ptr uint64
-	len uint64
+type URegularExpressionPtr uint32
+type UCharPtr uint32
+type UErrorCode int32
+type CharPtr int32
+
+type funcs struct {
 	mod api.Module
 }
 
-func (s ModuleString) Close(ctx context.Context) {
-	free := s.mod.ExportedFunction("free")
-	free.Call(ctx, s.ptr)
-}
-
-func NewModuleString(ctx context.Context, mod api.Module, s string) ModuleString {
-	malloc := mod.ExportedFunction("malloc")
-	l := uint64(len(s))
-	res, err := malloc.Call(ctx, l)
+// Bind
+// u_strToUTF8(char *out, int bufflen, int * outsize, UChar *, int ucharlen, UErrorCode *)
+// To
+// u_strToUTF8(CharPtr, int, *int, UCharPtr, int, *UErrorCode)
+func (a funcs) U_strToUTF8(ctx context.Context, buff CharPtr, bufflen int, outlen *int, str UCharPtr, strlen int, uerr *UErrorCode) {
+	strToUTF8 := a.mod.ExportedFunction("u_strToUTF8_68")
+	var uerrptr uint64 = 0
+	if uerr != nil {
+		uerrptr = uint64(a.Malloc(ctx, 4))
+		a.mod.Memory().WriteUint32Le(uint32(uerrptr), uint32(*uerr))
+		defer func() {
+			res, ok := a.mod.Memory().ReadUint32Le(uint32(uerrptr))
+			if !ok {
+				panic("could not read uerr")
+			}
+			*uerr = UErrorCode(res)
+			a.Free(ctx, uint32(uerrptr))
+		}()
+	}
+	var outlenptr uint64 = 0
+	if outlen != nil {
+		outlenptr = uint64(a.Malloc(ctx, 4))
+		a.mod.Memory().WriteUint32Le(uint32(outlenptr), uint32(*outlen))
+		defer func() {
+			res, ok := a.mod.Memory().ReadUint32Le(uint32(outlenptr))
+			if !ok {
+				panic("could not read uerr")
+			}
+			*outlen = int(res)
+			a.Free(ctx, uint32(outlenptr))
+		}()
+	}
+	_, err := strToUTF8.Call(ctx, uint64(buff), uint64(bufflen), outlenptr, uint64(str), uint64(strlen), uerrptr)
 	if err != nil {
 		panic(err)
 	}
-	ptr := res[0]
-	if !mod.Memory().Write(uint32(ptr), []byte(s)) {
-		panic("did not copy string")
+}
+
+// Bind
+// u_strFromUTF8(UChar *out, int bufflen, int * outsize, char *, int strlen, UErrorCode *)
+// To
+// u_strFromUTF8(UCharPtr, int, *int, CharPtr, int, *UErrorCode)
+func (a funcs) U_strFromUTF8(ctx context.Context, buff UCharPtr, bufflen int, outlen *int, str CharPtr, strlen int, uerr *UErrorCode) {
+	strFromUTF8 := a.mod.ExportedFunction("u_strFromUTF8_68")
+	var uerrptr uint64 = 0
+	if uerr != nil {
+		uerrptr = uint64(a.Malloc(ctx, 4))
+		a.mod.Memory().WriteUint32Le(uint32(uerrptr), uint32(*uerr))
+		defer func() {
+			res, ok := a.mod.Memory().ReadUint32Le(uint32(uerrptr))
+			if !ok {
+				panic("could not read uerr")
+			}
+			*uerr = UErrorCode(res)
+			a.Free(ctx, uint32(uerrptr))
+		}()
 	}
-	return ModuleString{
-		ptr,
-		l,
-		mod,
+	var outlenptr uint64 = 0
+	if outlen != nil {
+		outlenptr = uint64(a.Malloc(ctx, 4))
+		a.mod.Memory().WriteUint32Le(uint32(outlenptr), uint32(*outlen))
+		defer func() {
+			res, ok := a.mod.Memory().ReadUint32Le(uint32(outlenptr))
+			if !ok {
+				panic("could not read uerr")
+			}
+			*outlen = int(res)
+			a.Free(ctx, uint32(outlenptr))
+		}()
 	}
-}
-
-type UCharString struct {
-	ptr uint64
-	mod api.Module
-}
-
-func (s UCharString) Close(ctx context.Context) {
-	ucharstring_free := s.mod.ExportedFunction("icu_ucharstring_free")
-	ucharstring_free.Call(ctx, s.ptr)
-}
-
-func NewUCharString(ctx context.Context, mod api.Module, s string) UCharString {
-	str := NewModuleString(ctx, mod, s)
-	defer str.Close(ctx)
-
-	ucharstring_fromUTF8 := mod.ExportedFunction("icu_ucharstring_fromUTF8")
-	res, err := ucharstring_fromUTF8.Call(ctx, str.ptr, str.len)
+	_, err := strFromUTF8.Call(ctx, uint64(buff), uint64(bufflen), outlenptr, uint64(str), uint64(strlen), uerrptr)
 	if err != nil {
 		panic(err)
 	}
-	return UCharString{res[0], mod}
 }
 
-type IntPtr struct {
-	ptr uint64
-	mod api.Module
-}
-
-func (i IntPtr) Close(ctx context.Context) {
-	free := i.mod.ExportedFunction("free")
-	free.Call(ctx, i.ptr)
-}
-
-func NewIntPtr(ctx context.Context, mod api.Module) IntPtr {
-	malloc := mod.ExportedFunction("malloc")
-	res, err := malloc.Call(ctx, 4)
+// Bind
+// uregex_findNext(URegularExpression *regex, UErrorCode *)
+// To
+// uregex_findNext(URegularExpressionPtr, *UErrorCode)
+func (a funcs) Uregex_findNext(ctx context.Context, regex URegularExpressionPtr, uerr *UErrorCode) bool {
+	findnext := a.mod.ExportedFunction("uregex_findNext_68")
+	var uerrptr uint64 = 0
+	if uerr != nil {
+		uerrptr = uint64(a.Malloc(ctx, 4))
+		a.mod.Memory().WriteUint32Le(uint32(uerrptr), uint32(*uerr))
+		defer func() {
+			res, ok := a.mod.Memory().ReadUint32Le(uint32(uerrptr))
+			if !ok {
+				panic("could not read uerr")
+			}
+			*uerr = UErrorCode(res)
+			a.Free(ctx, uint32(uerrptr))
+		}()
+	}
+	res, err := findnext.Call(ctx, uint64(regex), uerrptr)
 	if err != nil {
 		panic(err)
 	}
-	return IntPtr{
-		res[0],
-		mod,
-	}
+	return res[0] != 0
 }
 
-func (i IntPtr) Value() uint32 {
-	v, ok := i.mod.Memory().ReadUint32Le(uint32(i.ptr))
-	if !ok {
-		panic("failed to read intptr")
+func (a funcs) Uregex_start(ctx context.Context, regex URegularExpressionPtr, group int, uerr *UErrorCode) uint32 {
+	start := a.mod.ExportedFunction("uregex_start_68")
+	var uerrptr uint64 = 0
+	if uerr != nil {
+		uerrptr = uint64(a.Malloc(ctx, 4))
+		a.mod.Memory().WriteUint32Le(uint32(uerrptr), uint32(*uerr))
+		defer func() {
+			res, ok := a.mod.Memory().ReadUint32Le(uint32(uerrptr))
+			if !ok {
+				panic("could not read uerr")
+			}
+			*uerr = UErrorCode(res)
+			a.Free(ctx, uint32(uerrptr))
+		}()
 	}
-	return v
-}
-
-func (s UCharString) Substr(ctx context.Context, start, end uint64) string {
-	len := NewIntPtr(ctx, s.mod)
-	defer len.Close(ctx)
-
-	free := s.mod.ExportedFunction("free")
-	ucharstring_substr_toUTF8 := s.mod.ExportedFunction("icu_ucharstring_substr_toUTF8")
-
-	// Then we call toUTF8.
-	res, err := ucharstring_substr_toUTF8.Call(ctx, s.ptr, start, end, len.ptr)
+	res, err := start.Call(ctx, uint64(regex), uint64(group), uerrptr)
 	if err != nil {
 		panic(err)
 	}
-	charPtr := res[0]
-	defer free.Call(ctx, charPtr)
-
-	// And we do some machinations to read the result.
-	charSlice, ok := s.mod.Memory().Read(uint32(charPtr), len.Value())
-	if !ok {
-		panic("failed to read char slice")
-	}
-	return string(charSlice)
+	return uint32(res[0])
 }
 
-func ReadUCharString(ctx context.Context, mod api.Module, ucharPtr uint64) string {
-	malloc := mod.ExportedFunction("malloc")
-	free := mod.ExportedFunction("free")
-	ucharstring_toUTF8 := mod.ExportedFunction("icu_ucharstring_toUTF8")
-
-	res, err := malloc.Call(ctx, 4)
+func (a funcs) Uregex_end(ctx context.Context, regex URegularExpressionPtr, group int, uerr *UErrorCode) uint32 {
+	end := a.mod.ExportedFunction("uregex_end_68")
+	var uerrptr uint64 = 0
+	if uerr != nil {
+		uerrptr = uint64(a.Malloc(ctx, 4))
+		a.mod.Memory().WriteUint32Le(uint32(uerrptr), uint32(*uerr))
+		defer func() {
+			res, ok := a.mod.Memory().ReadUint32Le(uint32(uerrptr))
+			if !ok {
+				panic("could not read uerr")
+			}
+			*uerr = UErrorCode(res)
+			a.Free(ctx, uint32(uerrptr))
+		}()
+	}
+	res, err := end.Call(ctx, uint64(regex), uint64(group), uerrptr)
 	if err != nil {
 		panic(err)
 	}
-	lenPtr := res[0]
-	defer free.Call(ctx, lenPtr)
+	return uint32(res[0])
+}
 
-	// Then we call toUTF8.
-	res, err = ucharstring_toUTF8.Call(ctx, ucharPtr, lenPtr)
+func (a funcs) Uregex_setText(ctx context.Context, p URegularExpressionPtr, str UCharPtr, strlen int, uerr *UErrorCode) {
+	setText := a.mod.ExportedFunction("uregex_setText_68")
+	var uerrptr uint64 = 0
+	if uerr != nil {
+		uerrptr = uint64(a.Malloc(ctx, 4))
+		a.mod.Memory().WriteUint32Le(uint32(uerrptr), uint32(*uerr))
+		defer func() {
+			res, ok := a.mod.Memory().ReadUint32Le(uint32(uerrptr))
+			if !ok {
+				panic("could not read uerr")
+			}
+			*uerr = UErrorCode(res)
+			a.Free(ctx, uint32(uerrptr))
+		}()
+	}
+	_, err := setText.Call(ctx, uint64(p), uint64(str), uint64(strlen), uerrptr)
 	if err != nil {
 		panic(err)
 	}
-	charPtr := res[0]
-	defer free.Call(ctx, charPtr)
+}
 
-	// And we do some machinations to read the result.
-	charLen, ok := mod.Memory().ReadUint32Le(uint32(lenPtr))
-	if !ok {
-		panic("failed to read len")
+func (a funcs) Uregex_open(ctx context.Context, str UCharPtr, strlen int, flags uint32, uerr *UErrorCode) URegularExpressionPtr {
+	open := a.mod.ExportedFunction("uregex_open_68")
+	var uerrptr uint64 = 0
+	if uerr != nil {
+		uerrptr = uint64(a.Malloc(ctx, 4))
+		a.mod.Memory().WriteUint32Le(uint32(uerrptr), uint32(*uerr))
+		defer func() {
+			res, ok := a.mod.Memory().ReadUint32Le(uint32(uerrptr))
+			if !ok {
+				panic("could not read uerr")
+			}
+			*uerr = UErrorCode(res)
+			a.Free(ctx, uint32(uerrptr))
+		}()
 	}
-	charSlice, ok := mod.Memory().Read(uint32(charPtr), charLen)
-	if !ok {
-		panic("failed to read char slice")
+	res, err := open.Call(ctx, uint64(str), uint64(strlen), uint64(flags), uint64(0), uerrptr)
+	if err != nil {
+		panic(err)
 	}
-	return string(charSlice)
+	return URegularExpressionPtr(res[0])
+}
+
+func (a funcs) Uregex_close(ctx context.Context, p URegularExpressionPtr) {
+	close := a.mod.ExportedFunction("uregex_close_68")
+	_, err := close.Call(ctx, uint64(p))
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (a funcs) Malloc(ctx context.Context, sz uint32) uint32 {
+	malloc := a.mod.ExportedFunction("malloc")
+	res, err := malloc.Call(ctx, uint64(sz))
+	if err != nil {
+		panic(err)
+	}
+	return uint32(res[0])
+}
+
+func (a funcs) Free(ctx context.Context, ptr uint32) {
+	free := a.mod.ExportedFunction("free")
+	_, err := free.Call(ctx, uint64(ptr))
+	if err != nil {
+		panic(err)
+	}
 }
 
 func NewRuntime(ctx context.Context) wazero.Runtime {
@@ -175,6 +262,121 @@ func LoadICUModule(ctx context.Context, runtime wazero.Runtime) api.Module {
 	return mod
 }
 
+func RunRegexMatching(ctx context.Context, mod api.Module, tomatch, re string) {
+	var f funcs = funcs{mod}
+
+	str := f.Malloc(ctx, uint32(len(tomatch)))
+	if !mod.Memory().Write(uint32(str), []byte(tomatch)) {
+		panic("did not copy string")
+	}
+	defer f.Free(ctx, uint32(str))
+
+	restr := f.Malloc(ctx, uint32(len(re)))
+	if !mod.Memory().Write(uint32(restr), []byte(re)) {
+		panic("did not copy string")
+	}
+	defer f.Free(ctx, uint32(restr))
+
+	// str -> ustr
+
+	var ustrlen int
+	var uerr UErrorCode
+	f.U_strFromUTF8(ctx, 0, 0, &ustrlen, CharPtr(str), len(tomatch), &uerr)
+	if uerr != 15 {
+		panic(fmt.Sprintf("unexpected uerr: %d", uerr))
+	}
+	ustr := UCharPtr(f.Malloc(ctx, uint32(ustrlen * 2)))
+	defer f.Free(ctx, uint32(ustr))
+	uerr = 0
+	f.U_strFromUTF8(ctx, ustr, ustrlen, nil, CharPtr(str), len(tomatch), &uerr)
+	if uerr > 0 {
+		panic(fmt.Sprintf("unexpected uerr: %d", uerr))
+	}
+
+	// restr -> reustr
+
+	var urestrlen int
+	uerr = 0
+	f.U_strFromUTF8(ctx, 0, 0, &urestrlen, CharPtr(restr), len(re), &uerr)
+	if uerr != 15 {
+		panic(fmt.Sprintf("unexpected uerr: %d", uerr))
+	}
+	urestr := UCharPtr(f.Malloc(ctx, uint32(urestrlen * 2)))
+	defer f.Free(ctx, uint32(urestr))
+	uerr = 0
+	f.U_strFromUTF8(ctx, urestr, urestrlen, nil, CharPtr(restr), len(re), &uerr)
+	if uerr > 0 {
+		panic(fmt.Sprintf("unexpected uerr: %d", uerr))
+	}
+
+	// make a regex
+
+	uerr = 0
+	regex := f.Uregex_open(ctx, urestr, urestrlen, 0, &uerr)
+	if uerr > 0 {
+		panic(fmt.Sprintf("unexpected uerr: %d", uerr))
+	}
+	defer f.Uregex_close(ctx, regex)
+
+	// set its text
+
+	uerr = 0
+	f.Uregex_setText(ctx, regex, ustr, ustrlen, &uerr)
+	if uerr > 0 {
+		panic(fmt.Sprintf("unexpected uerr: %d", uerr))
+	}
+
+	// print out the matches
+
+	uerr = 0
+	for f.Uregex_findNext(ctx, regex, &uerr) {
+		if uerr != 0 {
+			panic("unexpected uerr")
+		}
+
+		uerr = 0
+		start := f.Uregex_start(ctx, regex, 0, &uerr)
+		if uerr != 0 {
+			panic("unexpected uerr")
+		}
+
+		uerr = 0
+		end := f.Uregex_end(ctx, regex, 0, &uerr)
+		if uerr != 0 {
+			panic("unexpected uerr")
+		}
+
+		str := uchar_substr(ctx, f, ustr, ustrlen, start, end)
+		fmt.Println("found match", str)
+
+		uerr = 0
+	}
+}
+
+func uchar_substr(ctx context.Context, f funcs, p UCharPtr, len int, start, end uint32) string {
+	var uerr UErrorCode = 0
+	var outlen int
+	f.U_strToUTF8(ctx, 0, 0, &outlen, UCharPtr(uint64(p) + uint64(start) * 2), int(uint64(end) - uint64(start)), &uerr)
+	if uerr != 15 {
+		panic("unexpected uerr")
+	}
+
+	outstr := f.Malloc(ctx, uint32(outlen))
+	defer f.Free(ctx, uint32(outstr))
+
+	uerr = 0
+	f.U_strToUTF8(ctx, CharPtr(outstr), outlen, nil, UCharPtr(uint64(p) + uint64(start) * 2), int(uint64(end) - uint64(start)), &uerr)
+	if uerr > 0 {
+		panic("unexpected uerr")
+	}
+
+	bs, ok := f.mod.Memory().Read(uint32(outstr), uint32(outlen))
+	if !ok {
+		panic("unexpected read out of bounds")
+	}
+	return string(bs)
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -183,61 +385,5 @@ func main() {
 
 	mod := LoadICUModule(ctx, r)
 
-	str := NewUCharString(ctx, mod, "Hello, world!")
-	defer str.Close(ctx)
-
-	fmt.Println("read back", ReadUCharString(ctx, mod, str.ptr))
-
-	fmt.Println("read back", str.Substr(ctx, 1, 5))
-
-	// Now we are going to compile a regex, set its target text, run findNext and print out the results, and then clean up.
-
-	regex_open := mod.ExportedFunction("icu_uregex_open")
-	regex_close := mod.ExportedFunction("uregex_close_68")
-	regex_findNext := mod.ExportedFunction("icu_uregex_findNext")
-	regex_start := mod.ExportedFunction("icu_uregex_start")
-	regex_end := mod.ExportedFunction("icu_uregex_end")
-	regex_setText := mod.ExportedFunction("icu_uregex_setText")
-
-	regexStr := NewUCharString(ctx, mod, "[a-z]")
-	defer regexStr.Close(ctx)
-
-	fmt.Println(str.ptr)
-	fmt.Println(regexStr.ptr)
-
-	res, err := regex_open.Call(ctx, regexStr.ptr, 0)
-	if err != nil {
-		panic(err)
-	}
-	regex := res[0]
-	defer regex_close.Call(ctx, regex)
-
-	_, err = regex_setText.Call(ctx, regex, str.ptr)
-	if err != nil {
-		panic(err)
-	}
-
-	for {
-		res, err = regex_findNext.Call(ctx, regex)
-		if err != nil {
-			panic(err)
-		}
-		if res[0] == 0 {
-			break
-		}
-		res, err = regex_start.Call(ctx, regex, 0)
-		if err != nil {
-			panic(err)
-		}
-		start := res[0]
-		res, err = regex_end.Call(ctx, regex, 0)
-		if err != nil {
-			panic(err)
-		}
-		end := res[0]
-
-		fmt.Println("found match", str.Substr(ctx, start, end))
-	}
-
-	fmt.Println("finished matching")
+	RunRegexMatching(ctx, mod, "testing, one, two, three", "[a-z]")
 }
